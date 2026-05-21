@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Runtime artefacts
+state/*.db
+state/*.json
+outputs/*.xlsx
+outputs/*.xls
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Playwright browsers
+.playwright/
+
+# Keep placeholder dirs
+!state/.gitkeep
+!outputs/.gitkeep

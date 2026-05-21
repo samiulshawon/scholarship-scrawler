@@ -1,0 +1,11 @@
+streamlit>=1.32
+playwright>=1.44
+playwright-stealth>=1.0.6
+pandas>=2.2
+openpyxl>=3.1
+PyYAML>=6.0
+beautifulsoup4>=4.12
+lxml>=5.2
+python-dateutil>=2.9
+# Optional: enable Redis-backed cache/queue. Comment out if unused.
+redis>=5.0

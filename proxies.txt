@@ -1,0 +1,4 @@
+# One proxy per line. Examples:
+# http://user:pass@host:port
+# socks5://host:port
+# Lines starting with '#' and blank lines are ignored.

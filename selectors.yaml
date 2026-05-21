@@ -1,0 +1,93 @@
+# Per-site CSS / XPath selectors. Edit this file to teach the crawler how to
+# parse new sources without touching Python code.
+#
+# Lookup is by hostname. Use "default" for the generic fallback parser.
+#
+# Each entry supports:
+#   listing:       selector that yields one element per scholarship card/link
+#   name:          selector (relative to a listing) for the scholarship name
+#   link:          selector (relative to a listing) for the apply/details URL
+#   deadline:      selector for the application deadline
+#   description:   selector for the body text used by the verifier
+#   pagination:    selector for the "next page" link (optional)
+#
+# Selector strings beginning with "xpath=" are treated as XPath; otherwise CSS.
+
+default:
+  listing: "article, li.scholarship, div.scholarship, div.card, li"
+  name: "h1, h2, h3, a"
+  link: "a"
+  deadline: "time, .deadline, [class*='deadline']"
+  description: "p, .description, .summary, .content"
+  pagination: "a[rel='next'], a.next, .pagination a:last-child"
+
+www.daad.de:
+  listing: "div.c-tile, article.c-tile"
+  name: "h2, h3"
+  link: "a.c-tile__link, a"
+  deadline: ".c-tile__meta, time"
+  description: "p, .c-tile__text"
+  pagination: "a.c-pagination__link--next"
+
+www2.daad.de:
+  listing: "tr, .result-item"
+  name: "td a, h3 a, a"
+  link: "td a, h3 a, a"
+  deadline: "td.deadline, .deadline"
+  description: "td.description, .description, p"
+
+www.campusfrance.org:
+  listing: "article, .card, .views-row"
+  name: "h2, h3"
+  link: "a"
+  deadline: ".date, time, .deadline"
+  description: "p, .field-content"
+
+www.studyinholland.nl:
+  listing: "article, .card"
+  name: "h2, h3"
+  link: "a"
+  deadline: ".deadline, time"
+  description: "p, .summary"
+
+si.se:
+  listing: "article, .card, li"
+  name: "h2, h3, a"
+  link: "a"
+  deadline: ".deadline, time"
+  description: "p"
+
+www.vliruos.be:
+  listing: "article, .scholarship, li"
+  name: "h2, h3, a"
+  link: "a"
+  deadline: ".deadline, time"
+  description: "p"
+
+erasmus-plus.ec.europa.eu:
+  listing: "article, .ecl-card, li"
+  name: "h2, h3"
+  link: "a"
+  deadline: "time, .deadline"
+  description: "p"
+
+www.dfat.gov.au:
+  listing: "article, .card, li"
+  name: "h2, h3"
+  link: "a"
+  deadline: "time, .deadline"
+  description: "p"
+
+scholarships.anu.edu.au:
+  listing: "tr, article, li"
+  name: "h3, a"
+  link: "a"
+  deadline: "td.deadline, .deadline, time"
+  description: "td.description, p"
+
+www.nzscholarships.govt.nz:
+  listing: "article, .scholarship, li"
+  name: "h2, h3, a"
+  link: "a"
+  deadline: ".deadline, time"
+  description: "p"
