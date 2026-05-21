@@ -30,14 +30,39 @@ from bs4 import BeautifulSoup
 
 try:                                            # Optional dependency: makes tests easier
     from playwright.async_api import async_playwright, Browser, BrowserContext, Page
-    from playwright_stealth import stealth_async
 except ImportError:                              # pragma: no cover
     async_playwright = None                      # type: ignore[assignment]
-    stealth_async = None                         # type: ignore[assignment]
+    Browser = BrowserContext = Page = None       # type: ignore[assignment]
+
+# playwright-stealth had a breaking API change in v2.0. We support both:
+#   v1.x: `from playwright_stealth import stealth_async` (a function)
+#   v2.x: `from playwright_stealth import Stealth`       (a class)
+stealth_async = None
+try:
+    from playwright_stealth import stealth_async as _stealth_v1  # type: ignore
+    stealth_async = _stealth_v1
+except ImportError:
+    try:
+        from playwright_stealth import Stealth as _Stealth  # type: ignore
+
+        _stealth_instance = _Stealth()
+
+        async def stealth_async(page):  # type: ignore[no-redef]
+            apply = getattr(_stealth_instance, "apply_stealth_async", None)
+            if apply is None:
+                apply = getattr(_stealth_instance, "apply", None)
+            if apply is not None:
+                await apply(page)
+    except ImportError:
+        stealth_async = None
 
 from db import Database
 from session_manager import SessionState
 from verifier import Verifier
+
+
+PLAYWRIGHT_AVAILABLE = async_playwright is not None
+STEALTH_AVAILABLE = stealth_async is not None
 
 
 # ----------------------------------------------------------------- queue model
@@ -325,8 +350,9 @@ class ScraperEngine:
     async def run(self) -> None:
         if async_playwright is None:
             raise RuntimeError(
-                "Playwright is not installed. Run `pip install -r requirements.txt` "
-                "and `playwright install chromium`."
+                "Playwright is not installed. Install it with:\n"
+                "    pip install -r requirements.txt\n"
+                "    playwright install chromium"
             )
 
         snapshot = self.state.snapshot()
@@ -338,19 +364,34 @@ class ScraperEngine:
             return
 
         self._log("info", f"starting session {self.state.session_id} with {len(queue) - cursor} URLs")
+        self.state.set_status("running")
 
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(
-                headless=self.headless,
-                proxy=self._pick_proxy(),
-            )
+            try:
+                browser = await pw.chromium.launch(
+                    headless=self.headless,
+                    proxy=self._pick_proxy(),
+                )
+            except Exception as exc:                 # most often: Chromium not installed
+                msg = str(exc).lower()
+                if "executable" in msg or "browser" in msg or "install" in msg:
+                    raise RuntimeError(
+                        "Chromium is not installed for Playwright. Run:\n"
+                        "    playwright install chromium\n"
+                        f"Original error: {exc}"
+                    ) from exc
+                raise
             try:
                 context = await self._new_context(browser)
                 page = await context.new_page()
                 if stealth_async is not None:
-                    await stealth_async(page)
+                    try:
+                        await stealth_async(page)
+                    except Exception as exc:
+                        self._log("warn", f"stealth init failed: {exc}; continuing without stealth")
 
                 for idx in range(cursor, len(queue)):
+                    self.state.heartbeat()
                     if self.state.is_paused():
                         self._log("warn", "pause requested — exiting after current loop")
                         break
