@@ -75,6 +75,9 @@ class SessionState:
                 "pages_visited": 0,
                 "records_found": 0,
                 "paused": False,
+                "status": "running",
+                "error": None,
+                "last_heartbeat": datetime.utcnow().isoformat(timespec="seconds"),
                 "logs": [],
             }
             self.save()
@@ -87,23 +90,58 @@ class SessionState:
             self.data["queue"] = remaining
             self.data["cursor"] = 0
             self.data["paused"] = False
+            self.data["status"] = "running"
+            self.data["error"] = None
+            self.data["last_heartbeat"] = datetime.utcnow().isoformat(timespec="seconds")
             self.save()
 
     # ------------------------------------------------------------- mutators
     def request_pause(self) -> None:
         with self._lock:
             self.data["paused"] = True
+            self.data["status"] = "paused"
             self.save()
 
     def is_paused(self) -> bool:
         with self._lock:
             return bool(self.data.get("paused"))
 
+    def heartbeat(self) -> None:
+        """Called by the crawler each loop iteration; UI uses it for liveness."""
+        with self._lock:
+            self.data["last_heartbeat"] = datetime.utcnow().isoformat(timespec="seconds")
+            self.save()
+
+    def set_status(self, status: str) -> None:
+        with self._lock:
+            self.data["status"] = status
+            self.save()
+
+    def set_error(self, message: str, traceback_str: str = "") -> None:
+        """Record a fatal error so the UI can render it."""
+        with self._lock:
+            self.data["status"] = "failed"
+            self.data["paused"] = True
+            self.data["error"] = {
+                "message": message,
+                "traceback": traceback_str,
+                "ts": datetime.utcnow().isoformat(timespec="seconds"),
+            }
+            self.save()
+
+    def clear_error(self) -> None:
+        with self._lock:
+            self.data["error"] = None
+            if self.data.get("status") == "failed":
+                self.data["status"] = "idle"
+            self.save()
+
     def advance(self, url: str) -> None:
         with self._lock:
             self.data["visited"] = list({*self.data.get("visited", []), url})
             self.data["cursor"] = self.data.get("cursor", 0) + 1
             self.data["pages_visited"] = self.data.get("pages_visited", 0) + 1
+            self.data["last_heartbeat"] = datetime.utcnow().isoformat(timespec="seconds")
             self.save()
 
     def increment_records(self, n: int = 1) -> None:
@@ -138,3 +176,13 @@ class SessionState:
     @property
     def session_id(self) -> str | None:
         return self.data.get("session_id")
+
+    @property
+    def status(self) -> str:
+        """Derived status: idle | running | paused | failed | completed."""
+        with self._lock:
+            return self.data.get("status") or ("idle" if not self.data.get("session_id") else "running")
+
+    @property
+    def error(self) -> dict | None:
+        return self.data.get("error")
