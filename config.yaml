@@ -1,0 +1,176 @@
+applicant:
+  nationality: Bangladesh
+  fields:
+    - Artificial Intelligence
+    - Machine Learning
+    - Data Science
+    - Computer Vision
+    - Natural Language Processing
+    - Computer Science
+    - Information Technology
+    - Software Engineering
+    - Cybersecurity
+  language: English
+
+# Keywords used by the verifier for fuzzy matching of eligible fields.
+field_keywords:
+  ai_ml:
+    - artificial intelligence
+    - machine learning
+    - deep learning
+    - computer vision
+    - natural language processing
+    - nlp
+    - data science
+    - data analytics
+  cse_core:
+    - computer science
+    - computer engineering
+    - software engineering
+    - information technology
+    - cybersecurity
+    - informatics
+    - computing
+
+# Phrases that indicate Bangladeshi applicants are accepted.
+bangladesh_accepted_phrases:
+  - bangladesh
+  - all nationalities
+  - open to all
+  - any nationality
+  - international students
+  - developing countries
+  - oda countries
+  - oda recipient
+
+targets:
+  europe:
+    intakes: [Fall 2026, Spring 2027]
+    countries:
+      - Germany
+      - France
+      - Netherlands
+      - Sweden
+      - Norway
+      - Finland
+      - Denmark
+      - Belgium
+      - Austria
+      - Switzerland
+      - Italy
+      - Spain
+      - Portugal
+      - Ireland
+      - Czech Republic
+      - Poland
+      - Hungary
+      - Estonia
+      - Latvia
+      - Lithuania
+  australia_nz:
+    intakes: [Semester 1 2027, Semester 2 2027]
+    countries:
+      - Australia
+      - New Zealand
+
+# Seed URLs grouped by country and phase. The crawler walks countries in the
+# order declared under targets.*.countries and within each country processes
+# phases strictly in this order: university -> government -> external -> joint.
+seeds:
+  Germany:
+    university:
+      - https://www.tum.de/en/studies/scholarships
+      - https://www.lmu.de/en/study/financing-your-studies/scholarships/
+      - https://www.kit.edu/studying/scholarships.php
+      - https://www.rwth-aachen.de/go/id/bzkw/?lidx=1
+    government:
+      - https://www2.daad.de/deutschland/stipendium/datenbank/en/21148-scholarship-database/
+    external:
+      - https://www.mpg.de/en
+    joint:
+      - https://erasmus-plus.ec.europa.eu/opportunities/individuals/students/erasmus-mundus-joint-masters-scholarships
+  France:
+    government:
+      - https://www.campusfrance.org/en/eiffel-scholarship-program-of-excellence
+    university: []
+    external: []
+    joint: []
+  Netherlands:
+    government:
+      - https://www.studyinholland.nl/finances/the-holland-scholarship
+    university:
+      - https://www.tudelft.nl/en/education/practical-matters/scholarships
+    external: []
+    joint: []
+  Sweden:
+    government:
+      - https://si.se/en/apply/scholarships/
+    university:
+      - https://www.kth.se/en/studies/master/admissions/scholarships
+    external: []
+    joint: []
+  Belgium:
+    government:
+      - https://www.vliruos.be/en/scholarships
+    university: []
+    external: []
+    joint: []
+  # Other European countries — populate as you extend the crawl.
+  Norway: {university: [], government: [https://studyinnorway.no/study-in-norway/scholarships], external: [], joint: []}
+  Finland: {university: [], government: [https://www.studyinfinland.fi/scholarships], external: [], joint: []}
+  Denmark: {university: [], government: [https://studyindenmark.dk/study-options/fees-and-funding/scholarships-1], external: [], joint: []}
+  Austria: {university: [], government: [], external: [], joint: []}
+  Switzerland: {university: [], government: [], external: [], joint: []}
+  Italy: {university: [], government: [], external: [], joint: []}
+  Spain: {university: [], government: [], external: [], joint: []}
+  Portugal: {university: [], government: [], external: [], joint: []}
+  Ireland: {university: [], government: [], external: [], joint: []}
+  Czech Republic: {university: [], government: [], external: [], joint: []}
+  Poland: {university: [], government: [], external: [], joint: []}
+  Hungary: {university: [], government: [], external: [], joint: []}
+  Estonia: {university: [], government: [], external: [], joint: []}
+  Latvia: {university: [], government: [], external: [], joint: []}
+  Lithuania: {university: [], government: [], external: [], joint: []}
+  Australia:
+    government:
+      - https://www.dfat.gov.au/people-to-people/australia-awards
+    university:
+      - https://scholarships.anu.edu.au/
+      - https://scholarships.unimelb.edu.au/
+    external: []
+    joint: []
+  New Zealand:
+    government:
+      - https://www.nzscholarships.govt.nz/
+    university:
+      - https://www.auckland.ac.nz/en/study/scholarships-and-awards.html
+    external: []
+    joint: []
+
+scraper:
+  min_delay_seconds: 3.0
+  max_delay_seconds: 7.0
+  retry_on_status: [429, 503, 504]
+  max_retries: 3
+  backoff_multiplier: 2.0
+  headless: true
+  proxy_file: proxies.txt          # optional; one proxy per line, e.g. http://user:pass@host:port
+  respect_robots_txt: true
+  domain_block_threshold: 3        # consecutive blocks before a domain is abandoned
+  per_domain_min_interval: 1.0     # seconds; never more than 1 req/sec/domain
+  user_agents:
+    - Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36
+    - Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15
+    - Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36
+    - Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0
+  viewport_min: [1280, 800]
+  viewport_max: [1920, 1080]
+
+verification:
+  probable_min_score: 70
+  confirmed_min_score: 85
+
+output:
+  directory: ./outputs
+  db_path: ./state/session.db
+  session_state_path: ./state/session_state.json
