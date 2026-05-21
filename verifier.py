@@ -83,6 +83,29 @@ def detect_tier(text: str) -> str | None:
     return None
 
 
+# Names / texts that are clearly site-chrome, not scholarships.
+# Drives the pre-verifier junk filter so the log doesn't fill up with
+# 'reject: LinkedIn', 'reject: Imprint', etc.
+JUNK_NAME_TOKENS = {
+    "imprint", "privacy", "privacy policy", "cookie", "cookies", "cookie policy",
+    "sitemap", "site map", "accessibility", "accessibility statement",
+    "terms", "terms and conditions", "terms of use", "legal", "legal notice",
+    "facebook", "twitter", "x", "instagram", "linkedin", "youtube", "tiktok",
+    "bluesky", "mastodon", "whatsapp", "telegram", "wechat", "weibo",
+    "press", "press room", "newsroom", "media", "shop", "store",
+    "home", "back to top", "menu", "search", "login", "log in", "sign in",
+    "contact", "contact us", "newsletter", "rss", "skip to content",
+    "share", "print", "subscribe",
+    "deutsch", "english", "français", "espanol", "español", "italiano",
+}
+
+JUNK_URL_HOSTS = (
+    "facebook.com", "twitter.com", "x.com", "instagram.com", "linkedin.com",
+    "youtube.com", "tiktok.com", "bluesky.app", "bsky.app", "mastodon.social",
+    "whatsapp.com", "t.me", "wa.me",
+)
+
+
 # ----------------------------------------------------------------------- engine
 @dataclass
 class VerificationResult:
@@ -90,6 +113,10 @@ class VerificationResult:
     score: int                 # 0..100
     notes: list[str]           # human-readable reasons / uncertainties
     normalised: dict[str, Any] # fields the caller should overwrite
+    discard_reason: str | None = None
+    """``junk`` for nav/footer noise filtered before the 5 checks; ``criteria``
+    for genuine listings that didn't pass the eligibility gates; ``None`` for
+    confirmed / probable."""
 
     def merge_into(self, record: dict[str, Any]) -> dict[str, Any]:
         record = {**record, **self.normalised}
@@ -114,6 +141,30 @@ class Verifier:
         self.thresholds = config.get("verification", {})
         self.confirmed_min = int(self.thresholds.get("confirmed_min_score", 85))
         self.probable_min = int(self.thresholds.get("probable_min_score", 70))
+
+    # ----------------------------------------------------- junk pre-filter
+    @staticmethod
+    def junk_reason(record: dict[str, Any]) -> str | None:
+        """Return a short reason if the listing is obvious site-chrome, else None."""
+        name = (record.get("name") or "").strip()
+        low = name.lower()
+        if not name or len(name) < 4:
+            return "name too short"
+        if len(name) > 250:
+            return "name too long"
+        if low in JUNK_NAME_TOKENS:
+            return f"navigation/footer text: '{name}'"
+        # short multi-word matches like 'Privacy Policy', 'Skip to content'
+        for token in JUNK_NAME_TOKENS:
+            if low == token or low.startswith(token + " ") or low.endswith(" " + token):
+                if len(name.split()) <= 4:
+                    return f"navigation/footer text: '{name}'"
+        url = (record.get("application_url") or "").lower()
+        if any(host in url for host in JUNK_URL_HOSTS):
+            return "social-media link"
+        if url.startswith(("javascript:", "mailto:", "tel:")) or url.endswith("#"):
+            return "non-content link"
+        return None
 
     # ----------------------------------------------------- individual checks
     def _check_bangladesh(self, text: str, eligible_field_value: str) -> tuple[bool, int, str]:
@@ -160,6 +211,18 @@ class Verifier:
 
     # --------------------------------------------------------------- public
     def verify(self, record: dict[str, Any]) -> VerificationResult:
+        # Short-circuit obvious noise (footer/nav links scraped by the generic
+        # parser) before running the full 5-check pipeline.
+        junk = self.junk_reason(record)
+        if junk:
+            return VerificationResult(
+                status="rejected",
+                score=0,
+                notes=[f"junk: {junk}"],
+                normalised={"last_verified": datetime.utcnow().isoformat(timespec="seconds")},
+                discard_reason="junk",
+            )
+
         text = " ".join(
             str(record.get(k, "") or "")
             for k in (
@@ -201,9 +264,18 @@ class Verifier:
 
         if score >= self.confirmed_min and all([bd_ok, fld_ok, tier_ok, eng_ok]):
             status = "confirmed"
+            discard = None
         elif score >= self.probable_min and bd_ok and fld_ok:
             status = "probable"
+            discard = None
         else:
             status = "rejected"
+            discard = "criteria"
 
-        return VerificationResult(status=status, score=int(min(score, 100)), notes=notes, normalised=normalised)
+        return VerificationResult(
+            status=status,
+            score=int(min(score, 100)),
+            notes=notes,
+            normalised=normalised,
+            discard_reason=discard,
+        )

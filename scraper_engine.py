@@ -439,6 +439,7 @@ class ScraperEngine:
                     records = await self._extract(html, url)
                     region = region_for(country, self.config)
                     saved = 0
+                    page_stats = {"extracted": len(records), "junk": 0, "criteria": 0, "probable": 0, "confirmed": 0}
                     for record in records:
                         record.setdefault("country", country)
                         record.setdefault("region", region)
@@ -446,15 +447,33 @@ class ScraperEngine:
                         record["session_id"] = self.state.session_id
                         result = self.verifier.verify(record)
                         if result.status == "rejected":
-                            self._log("error", f"reject: {record.get('name','?')} ({result.score})")
+                            if result.discard_reason == "junk":
+                                # Silent count — these are nav/footer links, not
+                                # interesting enough to log per-record.
+                                page_stats["junk"] += 1
+                            else:
+                                page_stats["criteria"] += 1
+                                reason = "; ".join(result.notes[:2]) if result.notes else "no reason"
+                                self._log(
+                                    "warn",
+                                    f"reject [criteria] {record.get('name','?')} ({result.score}): {reason}",
+                                )
                             continue
                         merged = result.merge_into(record)
                         self.db.upsert_scholarship(merged)
                         saved += 1
                         if result.status == "confirmed":
+                            page_stats["confirmed"] += 1
                             self._log("info", f"confirm: {merged.get('name','?')} ({result.score})")
                         else:
+                            page_stats["probable"] += 1
                             self._log("warn", f"probable: {merged.get('name','?')} ({result.score})")
+
+                    self._log(
+                        "info",
+                        "page summary: extracted={extracted} -> junk={junk}, "
+                        "criteria={criteria}, probable={probable}, confirmed={confirmed}".format(**page_stats),
+                    )
 
                     if saved:
                         self.state.increment_records(saved)

@@ -268,6 +268,71 @@ def render_results(db: Database, config: dict[str, Any]) -> None:
         st.dataframe(df, use_container_width=True, hide_index=True)
 
 
+def render_pipeline_stats(state: SessionState) -> None:
+    """Reads the per-page summary log lines to give the user a clear picture
+    of where listings are being filtered. This is the single best answer to
+    the question 'is the website blocking me, or am I just not finding
+    matching scholarships?'."""
+    snap = state.snapshot()
+    totals = {"extracted": 0, "junk": 0, "criteria": 0, "probable": 0, "confirmed": 0, "pages": 0}
+    for entry in snap.get("logs", []):
+        msg = entry.get("msg", "")
+        if not msg.startswith("page summary:"):
+            continue
+        totals["pages"] += 1
+        # Format: "page summary: extracted=21 -> junk=18, criteria=2, probable=1, confirmed=0"
+        for token in ("extracted", "junk", "criteria", "probable", "confirmed"):
+            marker = f"{token}="
+            idx = msg.find(marker)
+            if idx == -1:
+                continue
+            tail = msg[idx + len(marker):]
+            num = ""
+            for ch in tail:
+                if ch.isdigit():
+                    num += ch
+                else:
+                    break
+            if num:
+                totals[token] += int(num)
+
+    cols = st.columns(6)
+    cols[0].metric("Pages parsed", totals["pages"])
+    cols[1].metric("Listings extracted", totals["extracted"])
+    cols[2].metric(
+        "Junk filtered",
+        totals["junk"],
+        help="Footer/nav links (Imprint, LinkedIn, Sitemap, etc.) discarded before verification.",
+    )
+    cols[3].metric(
+        "Criteria-rejected",
+        totals["criteria"],
+        help="Real listings that did not pass the 5 eligibility checks (Bangladesh / field / intake / tier / English).",
+    )
+    cols[4].metric("Probable", totals["probable"])
+    cols[5].metric("Confirmed", totals["confirmed"])
+
+    if totals["pages"] and totals["confirmed"] == 0 and totals["probable"] == 0:
+        if totals["extracted"] == 0:
+            st.warning(
+                "Pages loaded successfully but no listings were extracted. "
+                "Add a per-host entry to `selectors.yaml` for these sites — "
+                "the generic parser doesn't know their structure."
+            )
+        elif totals["junk"] >= 0.8 * totals["extracted"]:
+            st.warning(
+                "Most listings were filtered as nav/footer junk — meaning the "
+                "generic parser is grabbing the page chrome instead of the "
+                "scholarship cards. Add per-host CSS in `selectors.yaml`."
+            )
+        elif totals["criteria"] > 0:
+            st.info(
+                "Listings were extracted and looked real, but didn't pass the "
+                "eligibility filters. Open the **Verification** log tab below "
+                "to see the specific reason for each."
+            )
+
+
 def render_logs(state: SessionState) -> None:
     snap = state.snapshot()
     logs = list(reversed(snap.get("logs", [])))
@@ -298,16 +363,28 @@ def render_logs(state: SessionState) -> None:
     with tabs[0]:
         _print(logs[:200])
     with tabs[1]:
-        _print(_filter(("error",)))
+        # Errors tab: real errors only (network, parse, abandon). Criteria
+        # rejections are NOT errors — they're routed to Verification.
+        err_logs = [
+            e for e in _filter(("error",))
+            if not e.get("msg", "").startswith("reject")
+        ]
+        _print(err_logs)
     with tabs[2]:
         block_logs = (
             _filter(("warn",), substr="block")
-            + _filter(("warn",), substr="skip")
             + _filter(("warn",), substr="abandon")
+            + _filter(("warn",), substr="robots")
         )
         _print(block_logs)
     with tabs[3]:
-        verif_logs = _filter(("info", "warn"), substr="confirm") + _filter(("warn",), substr="probable")
+        verif_logs = (
+            _filter(("info",), substr="confirm")
+            + _filter(("warn",), substr="probable")
+            + _filter(("warn",), substr="reject [criteria]")
+        )
+        # Sort newest first within the merged set.
+        verif_logs.sort(key=lambda e: e.get("ts", ""), reverse=True)
         _print(verif_logs)
 
 
@@ -343,6 +420,9 @@ def live_panels() -> None:
 
     st.subheader("Results")
     render_results(db, config)
+
+    st.subheader("Pipeline Summary")
+    render_pipeline_stats(state)
 
     st.subheader("Live Logs")
     render_logs(state)
